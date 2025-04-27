@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Add Question{% endblock %}
+{% block content %}
+<h3>Add New Question</h3>
+<form method="POST">
+  <div class="mb-3">
+    <label>Subject</label>
+    <input type="text" name="subject" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label>Question</label>
+    <textarea name="question" class="form-control" required></textarea>
+  </div>
+  <div class="mb-3">
+    <label>Answer</label>
+    <textarea name="answer" class="form-control" required></textarea>
+  </div>
+  <div class="mb-3">
+    <label>Video URL</label>
+    <input type="url" name="video_url" class="form-control">
+  </div>
+  <button class="btn btn-success">Add</button>
+</form>
+<script>CKEDITOR.replace('answer');</script>
+{% endblock %}

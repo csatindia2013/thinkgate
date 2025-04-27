@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Admin Panel{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 1rem;
+    }
+    .navbar {
+      background-color: #343a40;
+      padding: 1rem;
+    }
+    .navbar-brand {
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 1.5rem;
+      text-decoration: none;
+    }
+    .content {
+      padding: 2rem;
+    }
+    .btn-custom {
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .table-custom {
+      border-radius: 0.5rem;
+      overflow: hidden;
+      box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
+    }
+    .table-hover tbody tr:hover {
+      background-color: #e9ecef;
+    }
+    .page-title {
+      margin-bottom: 2rem;
+      font-weight: 700;
+      font-size: 1.8rem;
+      text-align: center;
+    }
+    .pagination {
+      margin-top: 1rem;
+    }
+    .ratio iframe {
+      border-radius: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('admin_dashboard') }}">Admin Panel</a>
+    <div>
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-danger btn-sm">🚪 Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="content">
+  {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<<<<<<< HEAD
+openai==0.28
+
+Flask
+pytesseract
+Pillow
+google-api-python-client
+opencv-python
+numpy
+rapidfuzz
+=======
+Flask
+pytesseract
+Pillow
+opencv-python-headless
+numpy
+openai
+google-api-python-client
+>>>>>>> 5566a9f84ac137b50a9021c3c13c8aa0df331d63
+python-dotenv

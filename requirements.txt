@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 openai==0.28
 
 Flask

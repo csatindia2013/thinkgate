@@ -1,5 +1,6 @@
 
-openai==0.28
+openai>=1.0.0
+
 
 
 pytesseract
@@ -15,7 +16,7 @@ pytesseract
 Pillow
 opencv-python-headless
 numpy
-openai
+
 google-api-python-client
 
 python-dotenv

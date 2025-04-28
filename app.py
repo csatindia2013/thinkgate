@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session
-from openai import OpenAI
+import openai
 import pytesseract
 from PIL import Image
 import os
@@ -11,7 +11,8 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 
 @app.route('/')
 def index():

@@ -18,10 +18,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Initialize OpenAI Client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ✅ OpenAI client initialization (no api_key manually)
+client = OpenAI()
 
-# Initialize YouTube Client
+# ✅ YouTube API key from environment
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 class QA(db.Model):
@@ -48,7 +48,7 @@ def chat_post():
     if not user_input and 'image' not in request.files:
         return jsonify({'reply': "❗ No input received.", 'youtube_embed': None})
 
-    # Handle image input
+    # Handle OCR image input
     if 'image' in request.files and request.files['image'].filename != '':
         image = request.files['image']
         filename = secure_filename(image.filename)
@@ -59,10 +59,10 @@ def chat_post():
         if not user_input.strip():
             user_input = "❗ Could not read the image clearly. Please try again."
 
-    # Instant display of student message
+    # Save student's message instantly
     session['messages'].append({"role": "user", "content": user_input})
 
-    # Check if question already in database
+    # Check if question already stored
     existing = QA.query.filter_by(question=user_input).first()
     if existing:
         assistant_reply = existing.answer
@@ -84,7 +84,7 @@ def chat_post():
             print(f"GPT Error: {e}")
             return jsonify({'reply': "❗ Error. Please try again.", 'youtube_embed': None})
 
-    # Fetch YouTube video
+    # Fetch related YouTube video
     youtube_embed = fetch_youtube_video(user_input)
 
     return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed})
@@ -145,4 +145,4 @@ def delete(qa_id):
     return redirect(url_for('admin'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)), debug=True)

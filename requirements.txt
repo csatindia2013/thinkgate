@@ -1,8 +1,11 @@
 Flask==3.1.0
 Flask-SQLAlchemy==3.1.1
+openai==1.23.2
 python-dotenv==1.0.1
 pytesseract==0.3.10
 Pillow==10.3.0
-openai==1.23.2
 google-api-python-client==2.168.0
-requests==2.31.0
+requests
+tqdm
+nltk
+textblob

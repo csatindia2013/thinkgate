@@ -1,122 +1,148 @@
-from flask import Flask, render_template, request, jsonify, session
-import openai
+import os
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+from dotenv import load_dotenv
 import pytesseract
 from PIL import Image
-import os
-import requests
-from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
+from openai import OpenAI
+from googleapiclient.discovery import build
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'
+app.secret_key = 'supersecretkey'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///answers.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ✅ Correct OpenAI API key setup
-openai.api_key = os.getenv("OPENAI_API_KEY")
+db = SQLAlchemy(app)
+
+# Initialize OpenAI Client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Initialize YouTube Client
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+
+class QA(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    question = db.Column(db.Text, unique=True, nullable=False)
+    answer = db.Column(db.Text, nullable=False)
+
+with app.app_context():
+    db.create_all()
 
 @app.route('/')
-def index():
+def home():
+    return render_template('home.html')
+
+@app.route('/chat')
+def chat():
+    if 'messages' not in session:
+        session['messages'] = []
     return render_template('chat.html')
 
 @app.route('/chat', methods=['POST'])
-def chat():
-    final_prompt = ""
+def chat_post():
+    user_input = request.form.get('user_input')
+    if not user_input and 'image' not in request.files:
+        return jsonify({'reply': "❗ No input received.", 'youtube_embed': None})
 
-    user_input = ''
-    if 'userInput' in request.form:
-        user_input = request.form.get('userInput', '').strip()
-    else:
-        user_input_list = request.form.getlist('userInput')
-        if user_input_list:
-            user_input = user_input_list[0].strip()
+    # Handle image input
+    if 'image' in request.files and request.files['image'].filename != '':
+        image = request.files['image']
+        filename = secure_filename(image.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        image.save(filepath)
+        img = Image.open(filepath)
+        user_input = pytesseract.image_to_string(img)
+        if not user_input.strip():
+            user_input = "❗ Could not read the image clearly. Please try again."
 
-    uploaded_file = None
-    if 'cameraInput' in request.files and request.files['cameraInput'].filename != '':
-        uploaded_file = request.files['cameraInput']
-    elif 'galleryInput' in request.files and request.files['galleryInput'].filename != '':
-        uploaded_file = request.files['galleryInput']
+    # Instant display of student message
+    session['messages'].append({"role": "user", "content": user_input})
 
-    ocr_text = ""
-    if uploaded_file:
-        try:
-            image = Image.open(uploaded_file.stream)
-            image = image.convert('RGB')
-            image.thumbnail((1024, 1024))
-            ocr_text = pytesseract.image_to_string(image)
-        except Exception as e:
-            print(f"OCR Error: {e}")
-
-    if ocr_text.strip():
-        final_prompt += f"OCR Extracted Text:\n{ocr_text.strip()}\n\n"
-    if user_input.strip():
-        final_prompt += f"{user_input.strip()}"
-
-    final_prompt = final_prompt.strip()
-
-    if not final_prompt:
-        return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': None})
-
-    if 'messages' not in session:
-        session['messages'] = []
-
-    if len(session['messages']) == 0:
-        session['messages'].append({
-            "role": "system",
-            "content": "You are a helpful AI tutor for students. If the user's query involves math, use LaTeX formatting inside $$ $$."
-        })
-
-    session['messages'].append({"role": "user", "content": final_prompt})
-
-    session['messages'] = session['messages'][-20:]
-
-    try:
-        # ✅ Correct OpenAI call
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=session['messages']
-        )
-        assistant_reply = response['choices'][0]['message']['content']
-
+    # Check if question already in database
+    existing = QA.query.filter_by(question=user_input).first()
+    if existing:
+        assistant_reply = existing.answer
         session['messages'].append({"role": "assistant", "content": assistant_reply})
+    else:
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=session['messages']
+            )
+            assistant_reply = response.choices[0].message.content
+            session['messages'].append({"role": "assistant", "content": assistant_reply})
 
-    except Exception as e:
-        print(f"GPT Error: {e}")
-        return jsonify({'reply': "❗ Error. Please try again.", 'youtube_embed': None})
+            # Save to database
+            new_qa = QA(question=user_input, answer=assistant_reply)
+            db.session.add(new_qa)
+            db.session.commit()
+        except Exception as e:
+            print(f"GPT Error: {e}")
+            return jsonify({'reply': "❗ Error. Please try again.", 'youtube_embed': None})
 
-    youtube_embed = get_youtube_embed(final_prompt)
+    # Fetch YouTube video
+    youtube_embed = fetch_youtube_video(user_input)
 
     return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed})
 
-def get_youtube_embed(query):
-    """Search YouTube for a video matching the query and return embed link."""
-    api_key = os.getenv("YOUTUBE_API_KEY")
-    search_url = "https://www.googleapis.com/youtube/v3/search"
-
-    params = {
-        'part': 'snippet',
-        'q': query,
-        'key': api_key,
-        'maxResults': 1,
-        'type': 'video',
-        'videoEmbeddable': 'true',
-        'safeSearch': 'strict'
-    }
-
+def fetch_youtube_video(query):
     try:
-        response = requests.get(search_url, params=params)
-        results = response.json()
-
-        if 'items' in results and len(results['items']) > 0:
-            video_id = results['items'][0]['id']['videoId']
-            return f"https://www.youtube.com/embed/{video_id}"
-        else:
-            return None
+        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+        request = youtube.search().list(
+            part='snippet',
+            q=query,
+            maxResults=1,
+            type='video'
+        )
+        response = request.execute()
+        video_id = response['items'][0]['id']['videoId']
+        embed_url = f"https://www.youtube.com/embed/{video_id}"
+        return embed_url
     except Exception as e:
-        print(f"YouTube API Error: {e}")
+        print(f"YouTube fetch error: {e}")
         return None
 
-# ✅ Final corrected Flask app run section for Render
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+@app.route('/clear', methods=['POST'])
+def clear():
+    session.pop('messages', None)
+    return redirect(url_for('chat'))
+
+@app.route('/admin')
+def admin():
+    qas = QA.query.all()
+    return render_template('admin.html', qas=qas)
+
+@app.route('/add', methods=['GET', 'POST'])
+def add():
+    if request.method == 'POST':
+        question = request.form['question']
+        answer = request.form['answer']
+        new_qa = QA(question=question, answer=answer)
+        db.session.add(new_qa)
+        db.session.commit()
+        return redirect(url_for('admin'))
+    return render_template('add.html')
+
+@app.route('/edit/<int:qa_id>', methods=['GET', 'POST'])
+def edit(qa_id):
+    qa = QA.query.get_or_404(qa_id)
+    if request.method == 'POST':
+        qa.question = request.form['question']
+        qa.answer = request.form['answer']
+        db.session.commit()
+        return redirect(url_for('admin'))
+    return render_template('edit_question.html', qa=qa)
+
+@app.route('/delete/<int:qa_id>')
+def delete(qa_id):
+    qa = QA.query.get_or_404(qa_id)
+    db.session.delete(qa)
+    db.session.commit()
+    return redirect(url_for('admin'))
+
+if __name__ == '__main__':
+    app.run(debug=True)

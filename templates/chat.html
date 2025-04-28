@@ -2,287 +2,166 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AI Student Chat</title>
+  <title>Student AI Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Marked.js for Markdown parsing -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-  <!-- MathJax for LaTeX rendering -->
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-
   <style>
-    :root {
-      --bg: #f0f2f5;
-      --fg: #1c1c1c;
-      --msg-bg: #ffffff;
-      --user-msg: #d1e7dd;
-      --accent: #4a90e2;
-    }
-    .dark {
-      --bg: #121212;
-      --fg: #e0e0e0;
-      --msg-bg: #1e1e1e;
-      --user-msg: #2a4033;
-      --accent: #4a90e2;
-    }
-
     body {
-      background-color: var(--bg);
-      color: var(--fg);
+      background: #f0f2f5;
       margin: 0;
-      min-height: 100vh;
+      padding: 0;
       display: flex;
       flex-direction: column;
+      height: 100vh;
     }
-
-    .top-bar {
+    #chat-box {
+      flex: 1;
+      overflow-y: auto;
       padding: 10px;
-      background: var(--msg-bg);
+    }
+    #input-section {
       display: flex;
-      justify-content: space-between;
+      flex-direction: row;
       align-items: center;
-      border-bottom: 1px solid #ccc;
-    }
-
-    .dark-toggle {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: var(--accent);
-    }
-
-    .container-box {
-      max-width: 800px;
-      margin: 0 auto;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      flex-grow: 1;
-    }
-
-    .chat-container {
-      flex-grow: 1;
-      padding: 20px 20px 90px 20px; /* Padding bottom to avoid overlap with input bar */
-      display: flex;
-      flex-direction: column;
-    }
-
-    .message {
-      padding: 14px 20px;
-      border-radius: 24px;
-      margin-bottom: 12px;
-      word-break: break-word;
-      background-color: var(--msg-bg);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-      max-width: 90%;
-    }
-
-    .user-message {
-      background-color: var(--user-msg);
-      align-self: flex-end;
-    }
-
-    .bot-message {
-      background-color: var(--msg-bg);
-      align-self: flex-start;
-    }
-
-    .input-bar {
-      background-color: var(--msg-bg);
       padding: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      background: white;
       border-top: 1px solid #ccc;
-      border-radius: 20px;
-      margin: 10px;
-      position: sticky;
-      bottom: 0;
-      z-index: 100;
     }
-
-    .input-bar input[type="text"] {
-      flex-grow: 1;
+    #userInput {
+      flex: 1;
+      padding: 8px;
       border: 1px solid #ccc;
       border-radius: 20px;
-      padding: 10px;
-      background: transparent;
-      outline: none;
-      color: var(--fg);
+      margin-right: 8px;
     }
-
-    .input-bar button, .input-bar label {
-      background-color: var(--accent);
-      color: white;
+    .icon-btn {
+      background: none;
       border: none;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      cursor: pointer;
+      margin-left: 5px;
+      font-size: 22px;
     }
-
-    #imagePreview {
-      max-height: 100px;
-      margin: 10px 0;
-      display: none;
+    #image-preview {
+      max-width: 100%;
+      max-height: 150px;
+      margin-top: 5px;
+    }
+    .msg-bubble {
+      background: #d1e7dd;
+      padding: 10px;
+      border-radius: 15px;
+      margin-bottom: 8px;
+      max-width: 80%;
+    }
+    .msg-bubble.bot {
+      background: #ffffff;
     }
   </style>
 </head>
-
 <body>
 
-  <!-- Top Bar -->
-  <div class="top-bar">
-    <div><b>📚 AI Student Tutor</b></div>
-    <button class="dark-toggle" onclick="toggleDarkMode()">🌙</button>
-  </div>
+<div id="chat-box" class="container"></div>
 
-  <div class="container-box">
+<div id="input-section" class="container-fluid">
+  <input type="text" id="userInput" placeholder="Type your question..." />
+  <button class="icon-btn" onclick="startSpeech()">🎤</button>
+  <button class="icon-btn" onclick="triggerCamera()">📷</button>
+  <button class="icon-btn" onclick="triggerGallery()">📁</button>
+  <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="uploadImage(this)">
+  <input type="file" id="galleryInput" accept="image/*" style="display:none;" onchange="uploadImage(this)">
+</div>
 
-    <!-- Chat Area -->
-    <div id="chat" class="chat-container"></div>
+<script>
+function appendMessage(content, sender="user") {
+  const msg = document.createElement('div');
+  msg.className = 'msg-bubble ' + (sender === "bot" ? 'bot' : '');
+  msg.innerHTML = content;
+  document.getElementById('chat-box').appendChild(msg);
+  document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+}
 
-    <!-- Image Preview -->
-    <img id="imagePreview" src="" />
+function triggerCamera() {
+  document.getElementById('cameraInput').click();
+}
 
-    <!-- Input Form -->
-    <form id="inputForm" class="input-bar" enctype="multipart/form-data">
-      <input type="text" id="userInput" placeholder="Type your question..." autocomplete="off" required>
-      <button type="button" id="micButton">🎤</button>
-      <label for="cameraInput">📷</label>
-      <input type="file" accept="image/*" capture="environment" id="cameraInput" style="display:none;">
-      <label for="galleryInput">📁</label>
-      <input type="file" accept="image/*" id="galleryInput" style="display:none;">
-      <button type="submit">➡️</button>
-    </form>
+function triggerGallery() {
+  document.getElementById('galleryInput').click();
+}
 
-  </div>
+function uploadImage(inputElement) {
+  const formData = new FormData();
+  formData.append(inputElement.id, inputElement.files[0]);
+  
+  appendMessage("📷 Uploading image...");
 
-  <script>
-    const chat = document.getElementById('chat');
-    const inputForm = document.getElementById('inputForm');
-    const userInput = document.getElementById('userInput');
-    const micButton = document.getElementById('micButton');
-    const cameraInput = document.getElementById('cameraInput');
-    const galleryInput = document.getElementById('galleryInput');
-    const imagePreview = document.getElementById('imagePreview');
-
-    function appendMessage(text, sender = 'user', isStreaming = false) {
-      const messageDiv = document.createElement('div');
-      messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
-      if (sender === 'user') {
-        messageDiv.innerHTML = marked.parse(text);
-      }
-      chat.appendChild(messageDiv);
-      chat.scrollTop = chat.scrollHeight;
-      return messageDiv;
+  fetch('/chat', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    appendMessage(data.reply, "bot");
+    if (data.youtube_embed) {
+      appendMessage(`<iframe width="300" height="180" src="${data.youtube_embed}" frameborder="0" allowfullscreen></iframe>`, "bot");
     }
+    inputElement.value = ""; // ✅ Clear the image after upload
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    appendMessage('❗ Failed to upload image.', "bot");
+    inputElement.value = ""; // Clear on error too
+  });
+}
 
-    function typeMessageStreaming(div, fullText) {
-      if (fullText.length <= 500) {
-        let index = 0;
-        const interval = setInterval(() => {
-          if (index < fullText.length) {
-            div.innerHTML += fullText[index++];
-            chat.scrollTop = chat.scrollHeight;
-          } else {
-            clearInterval(interval);
-            MathJax.typesetPromise();
-          }
-        }, 20);
-      } else {
-        div.innerHTML = fullText;
-        chat.scrollTop = chat.scrollHeight;
-        MathJax.typesetPromise();
-      }
+document.getElementById('userInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    sendText();
+  }
+});
+
+function sendText() {
+  const text = document.getElementById('userInput').value.trim();
+  if (!text) return;
+  
+  appendMessage(text);
+  document.getElementById('userInput').value = '';
+
+  const formData = new FormData();
+  formData.append('userInput', text);
+
+  fetch('/chat', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    appendMessage(data.reply, "bot");
+    if (data.youtube_embed) {
+      appendMessage(`<iframe width="300" height="180" src="${data.youtube_embed}" frameborder="0" allowfullscreen></iframe>`, "bot");
     }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    appendMessage('❗ Failed to send.', "bot");
+  });
+}
 
-    inputForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const text = userInput.value.trim();
-      const hasImage = cameraInput.files.length > 0 || galleryInput.files.length > 0;
+// 🎤 Speech-to-Text (Optional if you enabled)
+function startSpeech() {
+  if (!('webkitSpeechRecognition' in window)) {
+    alert('Speech Recognition not supported');
+    return;
+  }
+  const recognition = new webkitSpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.start();
 
-      if (!text && !hasImage) return;
-
-      appendMessage(text, 'user');
-      userInput.value = '';
-
-      const botDiv = appendMessage('', 'bot', true);
-
-      const formData = new FormData();
-      formData.append('userInput', text);
-      const cameraFile = cameraInput.files[0];
-      const galleryFile = galleryInput.files[0];
-      if (cameraFile) formData.append('cameraInput', cameraFile);
-      if (galleryFile) formData.append('galleryInput', galleryFile);
-
-      try {
-        const response = await fetch('/chat', { method: 'POST', body: formData });
-        const data = await response.json();
-        typeMessageStreaming(botDiv, data.reply);
-
-        if (data.youtube_embed) {
-          const ytDiv = document.createElement('div');
-          ytDiv.classList.add('message', 'bot-message');
-          ytDiv.innerHTML = `<iframe width="100%" height="200" src="${data.youtube_embed}" frameborder="0" allowfullscreen></iframe>`;
-          chat.appendChild(ytDiv);
-          chat.scrollTop = chat.scrollHeight;
-        }
-      } catch (error) {
-        botDiv.innerHTML = '❗Error. Please try again.';
-      }
-    });
-
-    micButton.addEventListener('click', () => {
-      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      recognition.lang = 'en-US';
-      recognition.start();
-      recognition.onresult = (event) => {
-        userInput.value = event.results[0][0].transcript;
-      };
-    });
-
-    cameraInput.addEventListener('change', (e) => {
-      previewAndSendImage(e.target.files[0]);
-    });
-
-    galleryInput.addEventListener('change', (e) => {
-      previewAndSendImage(e.target.files[0]);
-    });
-
-    function previewAndSendImage(file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        imagePreview.src = reader.result;
-        imagePreview.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function toggleDarkMode() {
-      document.body.classList.toggle('dark');
-    }
-
-    document.addEventListener('paste', (e) => {
-      const items = e.clipboardData.items;
-      for (let item of items) {
-        if (item.type.indexOf('image') !== -1) {
-          const file = item.getAsFile();
-          previewAndSendImage(file);
-          break;
-        }
-      }
-    });
-  </script>
+  recognition.onresult = function(event) {
+    document.getElementById('userInput').value = event.results[0][0].transcript;
+    sendText();
+  };
+}
+</script>
 
 </body>
 </html>

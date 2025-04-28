@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session
-from openai import OpenAI
+import openai
 import pytesseract
 from PIL import Image
 import os
@@ -11,8 +11,8 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')
 
-# ✅ Correct client initialization
-openai_client = OpenAI()
+# ✅ Correct for openai==0.28.1
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route('/')
 def index():
@@ -70,12 +70,12 @@ def chat():
     session['messages'] = session['messages'][-20:]
 
     try:
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=session['messages'],
             temperature=0.5
         )
-        assistant_reply = response.choices[0].message.content.strip()
+        assistant_reply = response['choices'][0]['message']['content'].strip()
 
         session['messages'].append({"role": "assistant", "content": assistant_reply})
 

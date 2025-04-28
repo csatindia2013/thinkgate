@@ -1,17 +1,19 @@
 from flask import Flask, render_template, request, jsonify, session
-from openai import OpenAI
+import openai
 import pytesseract
 from PIL import Image
 import os
 import requests
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ✅ Correct OpenAI API key setting
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route('/')
 def index():
@@ -61,21 +63,22 @@ def chat():
     if len(session['messages']) == 0:
         session['messages'].append({
             "role": "system",
-            "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting between $$ symbols. Example: 'The square of 5 is $$5^2 = 25$$'. If it is not a math question, reply normally."
+            "content": "You are a helpful AI tutor for students. If the user's query involves math, reply using LaTeX format between $$ $$ symbols."
         })
 
-    session['messages'].append({"role": "user", "content": str(final_prompt)})
+    session['messages'].append({"role": "user", "content": final_prompt})
 
     session['messages'] = session['messages'][-20:]
 
     try:
-        response = client.chat.completions.create(
+        # ✅ Correct OpenAI call
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=session['messages']
         )
-        assistant_reply = response.choices[0].message.content
+        assistant_reply = response['choices'][0]['message']['content']
 
-        session['messages'].append({"role": "assistant", "content": str(assistant_reply)})
+        session['messages'].append({"role": "assistant", "content": assistant_reply})
 
     except Exception as e:
         print(f"GPT Error: {e}")
@@ -96,8 +99,8 @@ def get_youtube_embed(query):
         'key': api_key,
         'maxResults': 1,
         'type': 'video',
-        'videoEmbeddable': 'true',  # ✅ Only embeddable videos
-        'safeSearch': 'strict'       # ✅ Safe for students
+        'videoEmbeddable': 'true',
+        'safeSearch': 'strict'
     }
 
     try:
@@ -110,7 +113,7 @@ def get_youtube_embed(query):
         else:
             return None
     except Exception as e:
-        print(f"YouTube API error: {e}")
+        print(f"YouTube API Error: {e}")
         return None
 
 if __name__ == "__main__":

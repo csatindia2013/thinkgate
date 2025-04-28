@@ -7,142 +7,126 @@ from PIL import Image
 from werkzeug.utils import secure_filename
 from openai import OpenAI
 from googleapiclient.discovery import build
+import time
 
+# Load environment variables
 load_dotenv()
 
+# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///answers.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Initialize database
 db = SQLAlchemy(app)
 
-# ✅ OpenAI client initialization (no api_key manually)
-client = OpenAI()
+# ✅ Correct new OpenAI client initialization
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
-# ✅ YouTube API key from environment
+# ✅ YouTube API Key
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-class QA(db.Model):
+# Database model
+class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    question = db.Column(db.Text, unique=True, nullable=False)
-    answer = db.Column(db.Text, nullable=False)
+    question = db.Column(db.String(500))
+    answer = db.Column(db.Text)
 
-with app.app_context():
-    db.create_all()
-
+# Routes
 @app.route('/')
 def home():
     return render_template('home.html')
 
-@app.route('/chat')
+@app.route('/chat', methods=['GET', 'POST'])
 def chat():
-    if 'messages' not in session:
-        session['messages'] = []
-    return render_template('chat.html')
+    if request.method == 'POST':
+        user_input = request.form.get('user_input')
 
-@app.route('/chat', methods=['POST'])
-def chat_post():
-    user_input = request.form.get('user_input')
-    if not user_input and 'image' not in request.files:
-        return jsonify({'reply': "❗ No input received.", 'youtube_embed': None})
-
-    # Handle OCR image input
-    if 'image' in request.files and request.files['image'].filename != '':
-        image = request.files['image']
-        filename = secure_filename(image.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        image.save(filepath)
-        img = Image.open(filepath)
-        user_input = pytesseract.image_to_string(img)
         if not user_input.strip():
-            user_input = "❗ Could not read the image clearly. Please try again."
+            return jsonify({'error': 'No input received.'})
 
-    # Save student's message instantly
-    session['messages'].append({"role": "user", "content": user_input})
+        # Check if answer already exists in database
+        existing = Answer.query.filter_by(question=user_input).first()
+        if existing:
+            return jsonify({'response': existing.answer})
 
-    # Check if question already stored
-    existing = QA.query.filter_by(question=user_input).first()
-    if existing:
-        assistant_reply = existing.answer
-        session['messages'].append({"role": "assistant", "content": assistant_reply})
-    else:
+        # Prepare GPT message
+        messages = [
+            {"role": "system", "content": "You are a helpful academic tutor. Provide clear, student-friendly explanations. Format math answers in LaTeX if needed."},
+            {"role": "user", "content": user_input}
+        ]
+
         try:
+            # GPT response
             response = client.chat.completions.create(
                 model="gpt-4o",
-                messages=session['messages']
+                messages=messages,
+                temperature=0.5
             )
-            assistant_reply = response.choices[0].message.content
-            session['messages'].append({"role": "assistant", "content": assistant_reply})
+
+            gpt_reply = response.choices[0].message.content.strip()
 
             # Save to database
-            new_qa = QA(question=user_input, answer=assistant_reply)
-            db.session.add(new_qa)
+            new_entry = Answer(question=user_input, answer=gpt_reply)
+            db.session.add(new_entry)
             db.session.commit()
+
+            # Search YouTube video
+            youtube_video = search_youtube(user_input)
+
+            return jsonify({'response': gpt_reply, 'video': youtube_video})
+
         except Exception as e:
-            print(f"GPT Error: {e}")
-            return jsonify({'reply': "❗ Error. Please try again.", 'youtube_embed': None})
+            print("GPT Error:", str(e))
+            return jsonify({'error': 'Error. Please try again.'})
 
-    # Fetch related YouTube video
-    youtube_embed = fetch_youtube_video(user_input)
+    return render_template('chat.html')
 
-    return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed})
+# Upload image for OCR
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return redirect(url_for('chat'))
 
-def fetch_youtube_video(query):
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('chat'))
+
+    if file:
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        # OCR extraction
+        text = pytesseract.image_to_string(Image.open(filepath))
+
+        return jsonify({'extracted_text': text})
+
+# Admin view questions and answers
+@app.route('/admin', methods=['GET'])
+def admin():
+    entries = Answer.query.all()
+    return render_template('admin.html', entries=entries)
+
+# Search YouTube video based on question
+def search_youtube(query):
     try:
         youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
-        request = youtube.search().list(
-            part='snippet',
-            q=query,
-            maxResults=1,
-            type='video'
-        )
-        response = request.execute()
-        video_id = response['items'][0]['id']['videoId']
-        embed_url = f"https://www.youtube.com/embed/{video_id}"
-        return embed_url
+        req = youtube.search().list(q=query, part='snippet', type='video', maxResults=1)
+        res = req.execute()
+        video_id = res['items'][0]['id']['videoId']
+        embed_link = f"https://www.youtube.com/embed/{video_id}"
+        return embed_link
     except Exception as e:
-        print(f"YouTube fetch error: {e}")
+        print("YouTube Error:", str(e))
         return None
 
-@app.route('/clear', methods=['POST'])
-def clear():
-    session.pop('messages', None)
-    return redirect(url_for('chat'))
-
-@app.route('/admin')
-def admin():
-    qas = QA.query.all()
-    return render_template('admin.html', qas=qas)
-
-@app.route('/add', methods=['GET', 'POST'])
-def add():
-    if request.method == 'POST':
-        question = request.form['question']
-        answer = request.form['answer']
-        new_qa = QA(question=question, answer=answer)
-        db.session.add(new_qa)
-        db.session.commit()
-        return redirect(url_for('admin'))
-    return render_template('add.html')
-
-@app.route('/edit/<int:qa_id>', methods=['GET', 'POST'])
-def edit(qa_id):
-    qa = QA.query.get_or_404(qa_id)
-    if request.method == 'POST':
-        qa.question = request.form['question']
-        qa.answer = request.form['answer']
-        db.session.commit()
-        return redirect(url_for('admin'))
-    return render_template('edit_question.html', qa=qa)
-
-@app.route('/delete/<int:qa_id>')
-def delete(qa_id):
-    qa = QA.query.get_or_404(qa_id)
-    db.session.delete(qa)
-    db.session.commit()
-    return redirect(url_for('admin'))
-
+# Run app
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)), debug=True)
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

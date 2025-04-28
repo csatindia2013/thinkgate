@@ -1,4 +1,4 @@
-Flask
+
 Flask-SQLAlchemy
 openai>=1.0.0
 google-api-python-client
@@ -9,3 +9,11 @@ pytesseract
 Pillow
 python-dotenv
 python-Levenshtein
+
+
+Flask==3.1.0
+openai==1.23.2
+pytesseract==0.3.10
+Pillow==10.3.0
+python-dotenv==1.0.1
+requests==2.31.0

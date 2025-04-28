@@ -12,7 +12,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-# ✅ Correct OpenAI API key setting
+# ✅ Correct OpenAI API key setup
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route('/')
@@ -63,7 +63,7 @@ def chat():
     if len(session['messages']) == 0:
         session['messages'].append({
             "role": "system",
-            "content": "You are a helpful AI tutor for students. If the user's query involves math, reply using LaTeX format between $$ $$ symbols."
+            "content": "You are a helpful AI tutor for students. If the user's query involves math, use LaTeX formatting inside $$ $$."
         })
 
     session['messages'].append({"role": "user", "content": final_prompt})
@@ -82,7 +82,7 @@ def chat():
 
     except Exception as e:
         print(f"GPT Error: {e}")
-        return jsonify({'reply': "❗Error. Please try again.", 'youtube_embed': None})
+        return jsonify({'reply': "❗ Error. Please try again.", 'youtube_embed': None})
 
     youtube_embed = get_youtube_embed(final_prompt)
 
@@ -116,5 +116,7 @@ def get_youtube_embed(query):
         print(f"YouTube API Error: {e}")
         return None
 
+# ✅ Final corrected Flask app run section for Render
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

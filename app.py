@@ -11,31 +11,21 @@ from googleapiclient.discovery import build
 # Load environment variables
 load_dotenv()
 
-# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///answers.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize database
 db = SQLAlchemy(app)
 
-# ✅ Correct way for OpenAI client
-openai_client = openai.OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
-
-# ✅ YouTube API Key
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-# Database model
 class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question = db.Column(db.String(500))
     answer = db.Column(db.Text)
 
-# Routes
 @app.route('/')
 def home():
     return render_template('home.html')
@@ -48,20 +38,18 @@ def chat():
         if not user_input.strip():
             return jsonify({'error': 'No input received.'})
 
-        # Check database
         existing = Answer.query.filter_by(question=user_input).first()
         if existing:
             return jsonify({'response': existing.answer})
 
-        # Prepare GPT prompt
         messages = [
             {"role": "system", "content": "You are a helpful academic tutor. Provide clear, student-friendly explanations. Format math answers in LaTeX if needed."},
             {"role": "user", "content": user_input}
         ]
 
         try:
-            # GPT response
-            response = openai_client.chat.completions.create(
+            # ✅ Correct GPT call
+            response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
                 temperature=0.5
@@ -69,12 +57,10 @@ def chat():
 
             gpt_reply = response.choices[0].message.content.strip()
 
-            # Save to database
             new_entry = Answer(question=user_input, answer=gpt_reply)
             db.session.add(new_entry)
             db.session.commit()
 
-            # Search YouTube
             youtube_video = search_youtube(user_input)
 
             return jsonify({'response': gpt_reply, 'video': youtube_video})

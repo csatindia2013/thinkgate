@@ -6,14 +6,13 @@ import os
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default_secret_key')
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ✅ Correct client initialization
+openai_client = OpenAI()
 
 @app.route('/')
 def index():
@@ -67,10 +66,7 @@ def chat():
             )
         })
 
-    # Append user's latest message
     session['messages'].append({"role": "user", "content": final_prompt})
-
-    # Limit chat memory
     session['messages'] = session['messages'][-20:]
 
     try:
@@ -81,7 +77,6 @@ def chat():
         )
         assistant_reply = response.choices[0].message.content.strip()
 
-        # Save assistant reply to memory
         session['messages'].append({"role": "assistant", "content": assistant_reply})
 
     except Exception as e:

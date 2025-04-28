@@ -5,9 +5,8 @@ from dotenv import load_dotenv
 import pytesseract
 from PIL import Image
 from werkzeug.utils import secure_filename
-from openai import OpenAI
+import openai
 from googleapiclient.discovery import build
-import time
 
 # Load environment variables
 load_dotenv()
@@ -22,8 +21,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Initialize database
 db = SQLAlchemy(app)
 
-# ✅ Correct new OpenAI client initialization
-client = OpenAI(
+# ✅ Correct way for OpenAI client
+openai_client = openai.OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
@@ -49,12 +48,12 @@ def chat():
         if not user_input.strip():
             return jsonify({'error': 'No input received.'})
 
-        # Check if answer already exists in database
+        # Check database
         existing = Answer.query.filter_by(question=user_input).first()
         if existing:
             return jsonify({'response': existing.answer})
 
-        # Prepare GPT message
+        # Prepare GPT prompt
         messages = [
             {"role": "system", "content": "You are a helpful academic tutor. Provide clear, student-friendly explanations. Format math answers in LaTeX if needed."},
             {"role": "user", "content": user_input}
@@ -62,7 +61,7 @@ def chat():
 
         try:
             # GPT response
-            response = client.chat.completions.create(
+            response = openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
                 temperature=0.5
@@ -75,7 +74,7 @@ def chat():
             db.session.add(new_entry)
             db.session.commit()
 
-            # Search YouTube video
+            # Search YouTube
             youtube_video = search_youtube(user_input)
 
             return jsonify({'response': gpt_reply, 'video': youtube_video})
@@ -86,7 +85,6 @@ def chat():
 
     return render_template('chat.html')
 
-# Upload image for OCR
 @app.route('/upload', methods=['POST'])
 def upload():
     if 'file' not in request.files:
@@ -101,18 +99,15 @@ def upload():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        # OCR extraction
         text = pytesseract.image_to_string(Image.open(filepath))
 
         return jsonify({'extracted_text': text})
 
-# Admin view questions and answers
 @app.route('/admin', methods=['GET'])
 def admin():
     entries = Answer.query.all()
     return render_template('admin.html', entries=entries)
 
-# Search YouTube video based on question
 def search_youtube(query):
     try:
         youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
@@ -125,7 +120,6 @@ def search_youtube(query):
         print("YouTube Error:", str(e))
         return None
 
-# Run app
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

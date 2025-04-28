@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session
-from openai import OpenAI
+import openai
 import pytesseract
 from PIL import Image
 import os
@@ -11,7 +11,8 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ✅ Correct initialization
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route('/')
 def index():
@@ -69,11 +70,12 @@ def chat():
     session['messages'] = session['messages'][-20:]
 
     try:
-        response = client.chat.completions.create(
+        # ✅ Correct OpenAI call
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=session['messages']
         )
-        assistant_reply = response.choices[0].message.content
+        assistant_reply = response['choices'][0]['message']['content']
 
         session['messages'].append({"role": "assistant", "content": str(assistant_reply)})
 
@@ -96,8 +98,8 @@ def get_youtube_embed(query):
         'key': api_key,
         'maxResults': 1,
         'type': 'video',
-        'videoEmbeddable': 'true',  # ✅ Only embeddable videos
-        'safeSearch': 'strict'       # ✅ Safe for students
+        'videoEmbeddable': 'true',
+        'safeSearch': 'strict'
     }
 
     try:

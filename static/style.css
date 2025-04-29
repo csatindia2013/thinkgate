@@ -1,0 +1,207 @@
+/* style.css - ThinkGate AI Tutor */
+
+body {
+  background-color: #000;
+  color: white;
+  font-family: 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #000;
+  position: relative;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.selected-info {
+  font-size: 0.9rem;
+  color: #999;
+  margin-top: 4px;
+}
+
+.dropdown-menu {
+  background-color: #1f1f1f;
+  color: white;
+  border: 1px solid #333;
+  position: absolute;
+  right: 10px;
+  top: 60px;
+  display: none;
+  z-index: 10;
+  border-radius: 10px;
+  padding: 1rem;
+  min-width: 250px;
+}
+
+.button-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.chat-button {
+  background-color: #1f1f1f;
+  border: none;
+  padding: 1rem 1.5rem;
+  border-radius: 30px;
+  font-size: 1rem;
+  color: white;
+}
+
+.chat-button:hover {
+  background-color: #333333;
+}
+
+#chatArea {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.message {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  max-width: 80%;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.message img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.message-content {
+  padding: 0.75rem 1rem;
+  border-radius: 15px;
+  background-color: #1f1f1f;
+  color: white;
+  flex: 1;
+}
+
+.user-message {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.user-message img {
+  margin-left: 10px;
+  margin-right: 0;
+}
+
+.user-message .message-content {
+  background-color: #3b82f6;
+}
+
+/* Ask Area */
+.ask-area-container {
+  padding: 1rem;
+  background-color: #0d0d0d;
+  border-top: 1px solid #222;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.text-input-container {
+  flex-grow: 1;
+  position: relative;
+}
+
+.ask-input {
+  width: 100%;
+  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  border-radius: 30px;
+  border: none;
+  background-color: #1f1f1f;
+  color: white;
+  font-size: 1rem;
+}
+
+.ask-input::placeholder {
+  color: #888;
+}
+
+.send-button-inside {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #3b82f6;
+  cursor: pointer;
+}
+
+.send-button-inside:hover {
+  color: #2563eb;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  color: #ccc;
+}
+
+/* ✅ Pulse animation for mic when recording */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.pulsing {
+  animation: pulse 1.5s infinite;
+  border-radius: 50%;
+}
+
+#youtubeVideo {
+  margin: 20px 0;
+  text-align: left;
+}
+
+.image-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  margin: 10px auto;
+  border-radius: 10px;
+  border: 1px solid #444;
+  object-fit: cover;
+}

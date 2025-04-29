@@ -7,6 +7,7 @@ import requests
 import sqlite3
 from functools import wraps
 import math
+import re
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -15,12 +16,16 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 DB_FILE = 'questions.db'
 
+def normalize(text):
+    return re.sub(r'\s+', ' ', text.lower().strip())
+
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question TEXT NOT NULL,
+                normalized_question TEXT,
                 answer TEXT,
                 youtube TEXT
             )
@@ -70,7 +75,7 @@ def view_questions():
         total = cursor.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
         questions = cursor.execute("SELECT * FROM questions ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
     total_pages = math.ceil(total / per_page)
-    return render_template('questions.html', questions=questions, page=page, total_pages=total_pages)
+    return render_template('questions.html', questions=questions, page=page, total_pages=total_pages, search_query=request.args.get('search', ''))
 
 @app.route('/admin/add', methods=['GET', 'POST'])
 @login_required
@@ -79,8 +84,9 @@ def add_question():
         q = request.form.get('question')
         a = request.form.get('answer')
         y = request.form.get('youtube')
+        norm_q = normalize(q)
         with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT INTO questions (question, answer, youtube) VALUES (?, ?, ?)", (q, a, y))
+            conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (q, norm_q, a, y))
         return redirect(url_for('view_questions'))
     return render_template('add.html')
 
@@ -93,7 +99,8 @@ def edit_question(question_id):
             new_q = request.form.get('question')
             new_a = request.form.get('answer')
             new_y = request.form.get('youtube')
-            conn.execute("UPDATE questions SET question=?, answer=?, youtube=? WHERE id=?", (new_q, new_a, new_y, question_id))
+            norm_q = normalize(new_q)
+            conn.execute("UPDATE questions SET question=?, normalized_question=?, answer=?, youtube=? WHERE id=?", (new_q, norm_q, new_a, new_y, question_id))
             return redirect(url_for('view_questions'))
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
@@ -136,13 +143,16 @@ def chat():
     if not final_prompt.strip():
         return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': ""})
 
+    norm_prompt = normalize(final_prompt.strip())
+
     with sqlite3.connect(DB_FILE) as conn:
-        existing = conn.execute("SELECT answer, youtube FROM questions WHERE question = ?", (final_prompt.strip(),)).fetchone()
+        conn.row_factory = sqlite3.Row
+        existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (norm_prompt,)).fetchone()
 
     if existing:
         return jsonify({
-            'reply': existing[0] or "(No answer available)",
-            'youtube_embed': existing[1] or ""
+            'reply': existing['answer'] or "(No answer available)",
+            'youtube_embed': existing['youtube'] or ""
         })
 
     if 'messages' not in session:
@@ -169,7 +179,7 @@ def chat():
     youtube_embed = get_youtube_embed(final_prompt)
 
     with sqlite3.connect(DB_FILE) as conn:
-        conn.execute("INSERT INTO questions (question, answer, youtube) VALUES (?, ?, ?)", (final_prompt.strip(), assistant_reply, youtube_embed))
+        conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (final_prompt.strip(), norm_prompt, assistant_reply, youtube_embed))
 
     return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
 

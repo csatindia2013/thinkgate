@@ -6,15 +6,13 @@ import os
 import requests
 import sqlite3
 from functools import wraps
+import math
 
-# ✅ Initialize Flask app
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
-# ✅ OpenAI API key from environment (Render-compatible)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# ✅ SQLite DB setup (auto-create if doesn't exist)
 DB_FILE = 'questions.db'
 
 def init_db():
@@ -27,10 +25,6 @@ def init_db():
             )
         """)
 init_db()
-
-# ===================
-# 🔐 Admin Routes
-# ===================
 
 def login_required(f):
     @wraps(f)
@@ -65,9 +59,15 @@ def admin_dashboard():
 @app.route('/admin/questions')
 @login_required
 def view_questions():
+    page = int(request.args.get('page', 1))
+    per_page = 10
+    offset = (page - 1) * per_page
     with sqlite3.connect(DB_FILE) as conn:
-        questions = conn.execute("SELECT * FROM questions").fetchall()
-    return render_template('questions.html', questions=questions)
+        cursor = conn.cursor()
+        total = cursor.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
+        questions = cursor.execute("SELECT * FROM questions ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
+    total_pages = math.ceil(total / per_page)
+    return render_template('questions.html', questions=questions, page=page, total_pages=total_pages)
 
 @app.route('/admin/add', methods=['GET', 'POST'])
 @login_required
@@ -103,10 +103,6 @@ def admin_logout():
     session.clear()
     return redirect(url_for('admin_login'))
 
-# ===================
-# 🤖 Student Chat Route
-# ===================
-
 @app.route('/')
 def index():
     return render_template('chat.html')
@@ -115,9 +111,9 @@ def index():
 def chat():
     final_prompt = ""
     user_input = request.form.get('userInput', '').strip()
-
     uploaded_file = request.files.get('cameraInput') or request.files.get('galleryInput')
     ocr_text = ""
+
     if uploaded_file:
         try:
             image = Image.open(uploaded_file.stream).convert('RGB')
@@ -184,7 +180,6 @@ def get_youtube_embed(query):
         print(f"YouTube API error: {e}")
         return ""
 
-# ✅ For Render compatibility
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host='0.0.0.0', port=port)

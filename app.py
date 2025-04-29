@@ -91,8 +91,8 @@ def edit_question(question_id):
 def cleared_questions():
     return render_template('cleared.html')
 
-@app.route('/logout')
-def logout():
+@app.route('/admin/logout')
+def admin_logout():
     session.clear()
     return redirect(url_for('admin_login'))
 

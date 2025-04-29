@@ -59,6 +59,13 @@ def admin_login():
     return render_template('login.html', error=error)
 
 
+@app.route('/admin/logout')
+@login_required
+def admin_logout():
+    session.clear()
+    return redirect(url_for('admin_login'))
+
+
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():

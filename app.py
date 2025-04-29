@@ -69,13 +69,18 @@ def view_questions():
     page = int(request.args.get('page', 1))
     per_page = 10
     offset = (page - 1) * per_page
+    search = request.args.get('search', '').strip()
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        total = cursor.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
-        questions = cursor.execute("SELECT * FROM questions ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
+        if search:
+            total = cursor.execute("SELECT COUNT(*) FROM questions WHERE question LIKE ? OR answer LIKE ?", (f"%{search}%", f"%{search}%")).fetchone()[0]
+            questions = cursor.execute("SELECT * FROM questions WHERE question LIKE ? OR answer LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?", (f"%{search}%", f"%{search}%", per_page, offset)).fetchall()
+        else:
+            total = cursor.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
+            questions = cursor.execute("SELECT * FROM questions ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
     total_pages = math.ceil(total / per_page)
-    return render_template('questions.html', questions=questions, page=page, total_pages=total_pages, search_query=request.args.get('search', ''))
+    return render_template('questions.html', questions=questions, page=page, total_pages=total_pages, search_query=search)
 
 @app.route('/admin/add', methods=['GET', 'POST'])
 @login_required
@@ -104,6 +109,13 @@ def edit_question(question_id):
             return redirect(url_for('view_questions'))
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
+
+@app.route('/admin/delete/<int:question_id>', methods=['POST'])
+@login_required
+def delete_question(question_id):
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("DELETE FROM questions WHERE id=?", (question_id,))
+    return redirect(url_for('view_questions'))
 
 @app.route('/admin/cleared')
 @login_required

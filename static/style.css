@@ -10,6 +10,8 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .top-bar {
@@ -73,15 +75,17 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .message {
   display: flex;
   align-items: flex-start;
   margin-bottom: 1rem;
-  max-width: 80%;
-  white-space: pre-wrap;
-  line-height: 1.6;
+  width: 100%;
+  padding: 0 10px;
+  box-sizing: border-box;
 }
 
 .message img {
@@ -96,7 +100,12 @@ body {
   border-radius: 15px;
   background-color: #1f1f1f;
   color: white;
-  flex: 1;
+  line-height: 1.6;
+  max-width: 85%;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  box-sizing: border-box;
 }
 
 .user-message {
@@ -118,12 +127,16 @@ body {
   padding: 1rem;
   background-color: #0d0d0d;
   border-top: 1px solid #222;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input-wrapper {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .text-input-container {
@@ -139,6 +152,7 @@ body {
   background-color: #1f1f1f;
   color: white;
   font-size: 1rem;
+  box-sizing: border-box;
 }
 
 .ask-input::placeholder {
@@ -195,6 +209,14 @@ body {
   margin: 20px 0;
   text-align: left;
 }
+
+#youtubeVideo iframe {
+  width: 400px;
+  height: 225px;
+  max-width: 100%;
+  border-radius: 10px;
+}
+
 
 .image-preview {
   display: block;

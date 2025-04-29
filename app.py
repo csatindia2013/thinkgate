@@ -51,6 +51,7 @@ def admin_login():
 def admin_dashboard():
     search = request.args.get('search', '').strip()
     with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
         if search:
             questions = conn.execute("SELECT * FROM questions WHERE question LIKE ? ORDER BY id DESC", (f"%{search}%",)).fetchall()
         else:
@@ -64,6 +65,7 @@ def view_questions():
     per_page = 10
     offset = (page - 1) * per_page
     with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         total = cursor.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
         questions = cursor.execute("SELECT * FROM questions ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
@@ -86,6 +88,7 @@ def add_question():
 @login_required
 def edit_question(question_id):
     with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
         if request.method == 'POST':
             new_q = request.form.get('question')
             new_a = request.form.get('answer')
@@ -133,7 +136,6 @@ def chat():
     if not final_prompt.strip():
         return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': ""})
 
-    # ✅ Check local DB first to avoid API cost
     with sqlite3.connect(DB_FILE) as conn:
         existing = conn.execute("SELECT answer, youtube FROM questions WHERE question = ?", (final_prompt.strip(),)).fetchone()
 
@@ -166,7 +168,6 @@ def chat():
 
     youtube_embed = get_youtube_embed(final_prompt)
 
-    # ✅ Save new question-answer to DB for future
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute("INSERT INTO questions (question, answer, youtube) VALUES (?, ?, ?)", (final_prompt.strip(), assistant_reply, youtube_embed))
 

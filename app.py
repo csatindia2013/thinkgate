@@ -8,6 +8,7 @@ import sqlite3
 from functools import wraps
 import math
 import re
+from sympy import symbols, Eq, solve
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -16,8 +17,10 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 DB_FILE = 'questions.db'
 
+
 def normalize(text):
     return re.sub(r'\s+', ' ', text.lower().strip())
+
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
@@ -30,7 +33,10 @@ def init_db():
                 youtube TEXT
             )
         """)
+
+
 init_db()
+
 
 def login_required(f):
     @wraps(f)
@@ -39,6 +45,7 @@ def login_required(f):
             return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
     return wrapper
+
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_login():
@@ -51,6 +58,7 @@ def admin_login():
             error = "Invalid credentials"
     return render_template('login.html', error=error)
 
+
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
@@ -62,6 +70,7 @@ def admin_dashboard():
         else:
             questions = conn.execute("SELECT * FROM questions ORDER BY id DESC LIMIT 10").fetchall()
     return render_template('admin.html', questions=questions, search=search)
+
 
 @app.route('/admin/questions')
 @login_required
@@ -82,6 +91,7 @@ def view_questions():
     total_pages = math.ceil(total / per_page)
     return render_template('questions.html', questions=questions, page=page, total_pages=total_pages, search_query=search)
 
+
 @app.route('/admin/add', methods=['GET', 'POST'])
 @login_required
 def add_question():
@@ -94,6 +104,7 @@ def add_question():
             conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (q, norm_q, a, y))
         return redirect(url_for('view_questions'))
     return render_template('add.html')
+
 
 @app.route('/admin/edit/<int:question_id>', methods=['GET', 'POST'])
 @login_required
@@ -110,6 +121,7 @@ def edit_question(question_id):
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
 
+
 @app.route('/admin/delete/<int:question_id>', methods=['POST'])
 @login_required
 def delete_question(question_id):
@@ -117,20 +129,34 @@ def delete_question(question_id):
         conn.execute("DELETE FROM questions WHERE id=?", (question_id,))
     return redirect(url_for('view_questions'))
 
+
 @app.route('/admin/cleared')
 @login_required
 def cleared_questions():
     return render_template('cleared.html')
 
-@app.route('/admin/logout')
-@login_required
-def admin_logout():
-    session.clear()
-    return redirect(url_for('admin_login'))
 
 @app.route('/')
 def index():
     return render_template('chat.html')
+
+
+def try_solve_equation_pair(prompt):
+    try:
+        equations = re.findall(r'[\w\+\-\*/\^\s=]+', prompt)
+        if len(equations) < 2:
+            return None
+        eqs = [re.sub(r'(\b[a-z])(?=\b[a-z])', r'\1*', eq.replace('^', '**')) for eq in equations[:2]]
+        x, y = symbols('x y')
+        exprs = [Eq(eval(e.split('=')[0]), eval(e.split('=')[1])) for e in eqs]
+        solution = solve(exprs, (x, y), dict=True)
+        if solution:
+            return "✅ Solution found: " + ", ".join([f"x = {s[x]}, y = {s[y]}" for s in solution])
+        return None
+    except Exception as e:
+        print("❌ Equation solving failed:", e)
+        return None
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -167,6 +193,11 @@ def chat():
             'youtube_embed': existing['youtube'] or ""
         })
 
+    # Try to solve directly if it's a pair of math equations
+    equation_answer = try_solve_equation_pair(final_prompt)
+    if equation_answer:
+        return jsonify({'reply': equation_answer, 'youtube_embed': get_youtube_embed(final_prompt)})
+
     if 'messages' not in session:
         session['messages'] = [{
             "role": "system",
@@ -195,6 +226,7 @@ def chat():
 
     return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
 
+
 def get_youtube_embed(query):
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
@@ -219,6 +251,7 @@ def get_youtube_embed(query):
     except Exception as e:
         print(f"YouTube API error: {e}")
         return ""
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

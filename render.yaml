@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: aitutor
-    env: python
-    buildCommand: |
-      apt-get update
-      apt-get install -y tesseract-ocr libtesseract-dev libleptonica-dev
-      pip install -r requirements.txt
-    startCommand: python app.py
+    name: flask-ai-ocr
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
     envVars:
-      - key: PYTHONUNBUFFERED
-        value: '1'
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false

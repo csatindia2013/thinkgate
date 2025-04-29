@@ -21,7 +21,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question TEXT NOT NULL,
-                answer TEXT
+                answer TEXT,
+                youtube TEXT
             )
         """)
 init_db()
@@ -75,8 +76,9 @@ def add_question():
     if request.method == 'POST':
         q = request.form.get('question')
         a = request.form.get('answer')
+        y = request.form.get('youtube')
         with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT INTO questions (question, answer) VALUES (?, ?)", (q, a))
+            conn.execute("INSERT INTO questions (question, answer, youtube) VALUES (?, ?, ?)", (q, a, y))
         return redirect(url_for('view_questions'))
     return render_template('add.html')
 
@@ -87,7 +89,8 @@ def edit_question(question_id):
         if request.method == 'POST':
             new_q = request.form.get('question')
             new_a = request.form.get('answer')
-            conn.execute("UPDATE questions SET question=?, answer=? WHERE id=?", (new_q, new_a, question_id))
+            new_y = request.form.get('youtube')
+            conn.execute("UPDATE questions SET question=?, answer=?, youtube=? WHERE id=?", (new_q, new_a, new_y, question_id))
             return redirect(url_for('view_questions'))
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
@@ -130,6 +133,16 @@ def chat():
     if not final_prompt.strip():
         return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': ""})
 
+    # ✅ Check local DB first to avoid API cost
+    with sqlite3.connect(DB_FILE) as conn:
+        existing = conn.execute("SELECT answer, youtube FROM questions WHERE question = ?", (final_prompt.strip(),)).fetchone()
+
+    if existing:
+        return jsonify({
+            'reply': existing[0] or "(No answer available)",
+            'youtube_embed': existing[1] or ""
+        })
+
     if 'messages' not in session:
         session['messages'] = [{
             "role": "system",
@@ -145,7 +158,6 @@ def chat():
             messages=session['messages']
         )
         assistant_reply = response.choices[0].message.content.strip()
-        session['messages'].append({"role": "assistant", "content": assistant_reply})
     except Exception as e:
         import traceback
         print("❌ GPT Error:", e)
@@ -153,6 +165,11 @@ def chat():
         return jsonify({'reply': "❗ Error processing your request. Please try again.", 'youtube_embed': ""}), 500
 
     youtube_embed = get_youtube_embed(final_prompt)
+
+    # ✅ Save new question-answer to DB for future
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("INSERT INTO questions (question, answer, youtube) VALUES (?, ?, ?)", (final_prompt.strip(), assistant_reply, youtube_embed))
+
     return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
 
 def get_youtube_embed(query):

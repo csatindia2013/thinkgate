@@ -54,7 +54,13 @@ def admin_login():
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
-    return render_template('admin.html')
+    search = request.args.get('search', '').strip()
+    with sqlite3.connect(DB_FILE) as conn:
+        if search:
+            questions = conn.execute("SELECT * FROM questions WHERE question LIKE ? ORDER BY id DESC", (f"%{search}%",)).fetchall()
+        else:
+            questions = conn.execute("SELECT * FROM questions ORDER BY id DESC LIMIT 10").fetchall()
+    return render_template('admin.html', questions=questions, search=search)
 
 @app.route('/admin/questions')
 @login_required
@@ -92,6 +98,7 @@ def cleared_questions():
     return render_template('cleared.html')
 
 @app.route('/admin/logout')
+@login_required
 def admin_logout():
     session.clear()
     return redirect(url_for('admin_login'))

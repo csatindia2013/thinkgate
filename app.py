@@ -3,125 +3,109 @@ import openai
 import pytesseract
 from PIL import Image
 import os
-import requests
 from dotenv import load_dotenv
+import requests
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # replace securely in production
+app.secret_key = 'your_secret_key_here'
 
-# Setup OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @app.route('/')
 def index():
     return render_template('chat.html')
 
-@app.route('/save_profile', methods=['POST'])
-def save_profile():
-    """Save student's Board, Class, Subject in session."""
-    session['student_board'] = request.form.get('board', 'CBSE')
-    session['student_class'] = request.form.get('class', 'Class 8')
-    session['student_subject'] = request.form.get('subject', 'Math')
-    return jsonify({'status': 'success'})
-
 @app.route('/chat', methods=['POST'])
 def chat():
     final_prompt = ""
 
-    # Get user input text
-    user_input = ''
-    if 'userInput' in request.form:
-        user_input = request.form.get('userInput', '').strip()
-    else:
-        user_input_list = request.form.getlist('userInput')
-        if user_input_list:
-            user_input = user_input_list[0].strip()
+    # ✅ Extract user input text
+    user_input = request.form.get('userInput', '').strip()
 
-    # Check uploaded image file
+    # ✅ Extract uploaded file (camera or gallery)
     uploaded_file = None
-    if 'cameraInput' in request.files and request.files['cameraInput'].filename != '':
+    if 'cameraInput' in request.files and request.files['cameraInput'].filename:
         uploaded_file = request.files['cameraInput']
-    elif 'galleryInput' in request.files and request.files['galleryInput'].filename != '':
+    elif 'galleryInput' in request.files and request.files['galleryInput'].filename:
         uploaded_file = request.files['galleryInput']
 
-    # OCR from uploaded image
+    # ✅ Perform OCR if image exists
     ocr_text = ""
     if uploaded_file:
         try:
-            image = Image.open(uploaded_file.stream)
-            image = image.convert('RGB')
+            image = Image.open(uploaded_file.stream).convert('RGB')
             image.thumbnail((1024, 1024))
             ocr_text = pytesseract.image_to_string(image)
         except Exception as e:
             print(f"OCR Error: {e}")
 
-    # 🧠 Student Profile prompt
-    student_profile = f"You are a helpful AI tutor. The student is studying {session.get('student_subject', 'Math')} for {session.get('student_board', 'CBSE')} Board in {session.get('student_class', 'Class 8')}. Answer accordingly in a simple and clear manner."
-
+    # ✅ Combine prompt
     if ocr_text.strip():
         final_prompt += f"OCR Extracted Text:\n{ocr_text.strip()}\n\n"
-    if user_input.strip():
-        final_prompt += f"{user_input.strip()}"
+    if user_input:
+        final_prompt += user_input
 
-    final_prompt = student_profile + "\n\n" + final_prompt.strip()
+    final_prompt = final_prompt.strip()
+    if not final_prompt:
+        return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': ""})
 
-    if not final_prompt.strip():
-        return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': None})
-
-    # Setup message history
+    # ✅ Initialize chat history
     if 'messages' not in session:
-        session['messages'] = []
+        session['messages'] = [{
+            "role": "system",
+            "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."
+        }]
 
     session['messages'].append({"role": "user", "content": final_prompt})
-    session['messages'] = session['messages'][-20:]  # keep last 20 messages
+    session['messages'] = session['messages'][-20:]  # keep last 20
 
-    # Call OpenAI GPT model
+    # ✅ Get GPT response
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",  # you can change to "gpt-3.5-turbo" if needed
+        response = openai.chat.completions.create(
+            model="gpt-4o",
             messages=session['messages']
         )
-        assistant_reply = response['choices'][0]['message']['content']
+        assistant_reply = response.choices[0].message.content.strip()
         session['messages'].append({"role": "assistant", "content": assistant_reply})
     except Exception as e:
         print(f"GPT Error: {e}")
-        return jsonify({'reply': "❗Error. Please try again.", 'youtube_embed': None})
+        return jsonify({'reply': "❗ Error processing your request. Please try again.", 'youtube_embed': ""}), 500
 
-    # YouTube video suggestion
+    # ✅ Get YouTube video
     youtube_embed = get_youtube_embed(final_prompt)
 
-    return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed})
+    return jsonify({
+        'reply': assistant_reply,
+        'youtube_embed': youtube_embed or ""
+    })
 
 def get_youtube_embed(query):
-    """Search YouTube for a related video."""
     api_key = os.getenv("YOUTUBE_API_KEY")
-    search_url = "https://www.googleapis.com/youtube/v3/search"
-
-    params = {
-        'part': 'snippet',
-        'q': query,
-        'key': api_key,
-        'maxResults': 1,
-        'type': 'video',
-        'videoEmbeddable': 'true',
-        'safeSearch': 'strict'
-    }
+    if not api_key:
+        return ""
 
     try:
-        response = requests.get(search_url, params=params)
-        results = response.json()
-        if 'items' in results and len(results['items']) > 0:
-            video_id = results['items'][0]['id']['videoId']
-            return f"https://www.youtube.com/embed/{video_id}"
-        else:
-            return None
+        response = requests.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                'part': 'snippet',
+                'q': query,
+                'key': api_key,
+                'maxResults': 1,
+                'type': 'video',
+                'videoEmbeddable': 'true',
+                'safeSearch': 'strict'
+            }
+        )
+        data = response.json()
+        if 'items' in data and len(data['items']) > 0:
+            return f"https://www.youtube.com/embed/{data['items'][0]['id']['videoId']}"
+        return ""
     except Exception as e:
         print(f"YouTube API error: {e}")
-        return None
+        return ""
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)

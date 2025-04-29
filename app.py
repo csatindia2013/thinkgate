@@ -1,17 +1,13 @@
-from flask import Flask, render_template, request, jsonify, session
-import openai
-import pytesseract
-from PIL import Image
 import os
-from dotenv import load_dotenv
-import requests
-
-load_dotenv()
+import openai
+from flask import Flask, render_template, request, jsonify, session
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
+# ✅ Don’t use load_dotenv() on Render
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
 
 @app.route('/')
 def index():

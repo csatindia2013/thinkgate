@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Add Question - AI Student Chat</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <script src="https://cdn.ckeditor.com/4.21.0/full-all/ckeditor.js"></script>
+  <script src="https://cdn.ckeditor.com/4.25.1-lts/full-all/ckeditor.js"></script>
   <style>
     body {
       background: #f0f2f5;
@@ -28,12 +28,12 @@
   <div class="container">
     <div class="card p-4">
       <h2 class="text-center">➕ Add New Question</h2>
-      <form method="POST" class="mt-4">
+      <form method="POST" enctype="multipart/form-data" class="mt-4">
         <div class="mb-3">
           <textarea name="question" class="form-control" placeholder="Enter the question..." required rows="4"></textarea>
         </div>
         <div class="mb-3">
-          <textarea name="answer" id="answer" class="form-control" placeholder="Enter the answer..." required rows="6"></textarea>
+          <textarea name="answer" id="editor" class="form-control" placeholder="Enter the answer..." required></textarea>
         </div>
         <div class="mb-3">
           <input type="text" name="youtube" class="form-control" placeholder="YouTube Video URL (optional)">
@@ -48,11 +48,19 @@
       document.body.classList.toggle('dark');
     }
 
-    // ✅ Enable CKEditor with MathJax support
-    CKEDITOR.replace('answer', {
-      extraPlugins: 'mathjax',
-      mathJaxLib: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
-      height: 300
+    CKEDITOR.replace('editor', {
+      extraPlugins: 'mathjax,image2,uploadimage,autosave',
+      mathJaxLib: 'https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-MML-AM_CHTML',
+      height: 300,
+      removeButtons: '',
+      uploadUrl: '/uploader',  // Optional: You must handle this route in Flask if image upload is needed
+      autosave: {
+        SaveKey: 'ckeditor-autosave-answer',
+        delay: 30,
+        messageType: 'statusbar'
+      },
+      contentsCss: ['https://cdn.ckeditor.com/4.25.1-lts/full-all/contents.css', 'body.dark { background-color: #121212; color: #eee; }'],
+      bodyClass: document.body.classList.contains('dark') ? 'dark' : ''
     });
   </script>
 </body>

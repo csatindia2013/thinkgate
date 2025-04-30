@@ -200,7 +200,6 @@ def chat():
             'youtube_embed': existing['youtube'] or ""
         })
 
-    # Try to solve directly if it's a pair of math equations
     equation_answer = try_solve_equation_pair(final_prompt)
     if equation_answer:
         return jsonify({'reply': equation_answer, 'youtube_embed': get_youtube_embed(final_prompt)})

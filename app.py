@@ -21,7 +21,7 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 WHATSAPP_API_URL = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
-VERIFY_TOKEN = "my_secure_token"
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "my_secure_token")
 
 DB_FILE = 'questions.db'
 
@@ -32,7 +32,7 @@ def normalize(text):
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
-        conn.execute("""
+        conn.execute("
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question TEXT NOT NULL,
@@ -40,7 +40,7 @@ def init_db():
                 answer TEXT,
                 youtube TEXT
             )
-        """)
+        ")
 
 
 init_db()
@@ -164,7 +164,6 @@ def send_whatsapp_message(to, message):
     except Exception as e:
         print(f"❌ WhatsApp API Error: {e}")
         return None
-
 
 
 

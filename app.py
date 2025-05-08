@@ -155,6 +155,73 @@ def chat():
         return jsonify({'reply': "❌ An error occurred. Please try again.", 'youtube_embed': ""}), 500
 
 
+@app.route('/webhook', methods=['GET', 'POST'])
+def whatsapp_webhook():
+    try:
+        if request.method == 'GET':
+            verify_token = request.args.get('hub.verify_token')
+            challenge = request.args.get('hub.challenge')
+            if verify_token == VERIFY_TOKEN:
+                return challenge, 200
+            return '❌ Invalid Verify Token', 403
+        elif request.method == 'POST':
+            data = request.json
+            print(f"✅ Incoming Webhook Data: {data}")
+            if data.get("messages"):
+                message_data = data["messages"][0]
+                from_number = message_data["from"]
+                user_message = message_data["text"]["body"]
+                response_text = process_message(user_message)
+                send_whatsapp_message(from_number, response_text)
+            return '200 OK', 200
+    except Exception as e:
+        print(f"❌ Webhook Error: {e}")
+        return '500 Internal Server Error', 500
+
+
+def process_message(user_message):
+    normalized_prompt = normalize(user_message)
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
+        existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (normalized_prompt,)).fetchone()
+        if existing:
+            return existing['answer'] or '(No answer available)'
+    if 'messages' not in session:
+        session['messages'] = [{"role": "system", "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."}]
+    session['messages'].append({"role": "user", "content": user_message.strip()})
+    session['messages'] = session['messages'][-20:]
+    try:
+        response = openai.ChatCompletion.create(model="gpt-4o", messages=session['messages'])
+        assistant_reply = response.choices[0].message.content.strip()
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT INTO questions (question, normalized_question, answer) VALUES (?, ?, ?)", (user_message.strip(), normalized_prompt, assistant_reply))
+        return assistant_reply
+    except Exception as e:
+        print(f"❌ GPT Error: {e}")
+        return "❌ An error occurred. Please try again."
+
+
+def send_whatsapp_message(to, message):
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {"body": message}
+    }
+    try:
+        response = requests.post(WHATSAPP_API_URL, headers=headers, json=data)
+        response_data = response.json()
+        print(f"✅ WhatsApp Message Sent: {response_data}")
+        return response_data
+    except Exception as e:
+        print(f"❌ WhatsApp API Error: {e}")
+        return None
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host='0.0.0.0', port=port)

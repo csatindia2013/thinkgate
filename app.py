@@ -117,28 +117,6 @@ def edit_question(question_id):
     return render_template('edit_question.html', question=question)
 
 
-@app.route('/chat', methods=['GET', 'POST'])
-def chat():
-    if request.method == 'POST':
-        user_message = request.form.get('userInput', '').strip().lower()
-
-        # Simple math processing
-        if "find square of" in user_message:
-            number = re.findall(r"\d+", user_message)
-            if number:
-                n = int(number[0])
-                result = n ** 2
-                return jsonify({'reply': f"The square of {n} is {result}.", 'youtube_embed': ''})
-            else:
-                return jsonify({'reply': "❗ Please provide a valid number.", 'youtube_embed': ''})
-
-        # Default response
-        return jsonify({'reply': "Hello! How can I help you today?", 'youtube_embed': ''})
-
-    # For GET request, just load the chat page
-    return render_template("chat.html")
-
-
 @app.route('/webhook', methods=['GET', 'POST'])
 def whatsapp_webhook():
     if request.method == 'GET':
@@ -149,6 +127,7 @@ def whatsapp_webhook():
             print("✅ Webhook Verified Successfully")
             return challenge, 200
         else:
+            print("❌ Webhook Verification Failed")
             return "Verification Failed", 403
     if request.method == 'POST':
         try:
@@ -163,29 +142,6 @@ def whatsapp_webhook():
         except Exception as e:
             print(f"❌ Webhook Error: {e}")
             return "500 Internal Server Error"
-
-
-def send_whatsapp_message(to, message):
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
-        "text": {
-            "body": message
-        }
-    }
-    try:
-        response = requests.post(WHATSAPP_API_URL, headers=headers, json=data)
-        response_data = response.json()
-        print("✅ WhatsApp Message Sent:", response_data)
-        return response_data
-    except Exception as e:
-        print(f"❌ WhatsApp API Error: {e}")
-        return None
 
 
 @app.route('/')

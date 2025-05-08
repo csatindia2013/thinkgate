@@ -32,7 +32,7 @@ def normalize(text):
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
-        conn.execute("""
+        conn.execute("
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question TEXT NOT NULL,
@@ -40,7 +40,7 @@ def init_db():
                 answer TEXT,
                 youtube TEXT
             )
-        """)
+        ")
 
 
 init_db()
@@ -132,12 +132,16 @@ def whatsapp_webhook():
     if request.method == 'POST':
         try:
             data = request.json
-            if data.get("messages"):
-                message_data = data["messages"][0]
-                from_number = message_data["from"]
-                user_message = message_data["text"]["body"]
-                response_text = process_message(user_message)
-                send_whatsapp_message(from_number, response_text)
+            if data.get("entry"):
+                for entry in data["entry"]:
+                    if entry.get("changes"):
+                        for change in entry["changes"]:
+                            if change.get("value") and change["value"].get("messages"):
+                                message = change["value"]["messages"][0]
+                                from_number = message["from"]
+                                user_message = message["text"]["body"]
+                                response_text = process_message(user_message)
+                                send_whatsapp_message(from_number, response_text)
             return "200 OK"
         except Exception as e:
             print(f"❌ Webhook Error: {e}")

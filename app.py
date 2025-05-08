@@ -21,6 +21,7 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 WHATSAPP_API_URL = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+VERIFY_TOKEN = "my_secure_token"
 
 DB_FILE = 'questions.db'
 
@@ -119,17 +120,14 @@ def edit_question(question_id):
 @app.route('/webhook', methods=['GET', 'POST'])
 def whatsapp_webhook():
     if request.method == 'GET':
-        verify_token = "my_secure_token"
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
-
-        if mode == "subscribe" and token == verify_token:
+        if mode == "subscribe" and token == VERIFY_TOKEN:
             print("✅ Webhook Verified Successfully")
             return challenge, 200
         else:
             return "Verification Failed", 403
-
     if request.method == 'POST':
         try:
             data = request.json
@@ -137,8 +135,6 @@ def whatsapp_webhook():
                 message_data = data["messages"][0]
                 from_number = message_data["from"]
                 user_message = message_data["text"]["body"]
-
-                # Process the message
                 response_text = process_message(user_message)
                 send_whatsapp_message(from_number, response_text)
             return "200 OK"

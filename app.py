@@ -141,7 +141,6 @@ def chat():
         user_input = request.form.get('userInput', '').strip()
         uploaded_file = request.files.get('cameraInput') or request.files.get('galleryInput')
         ocr_text = ""
-        
         if uploaded_file:
             try:
                 image = Image.open(uploaded_file.stream).convert('RGB')
@@ -150,40 +149,30 @@ def chat():
             except Exception as e:
                 print(f"❌ OCR Error: {e}")
                 return jsonify({'reply': "❌ Error processing image. Please try again.", 'youtube_embed': ""}), 500
-        
-        # ✅ Corrected f-string
-        final_prompt = f"{ocr_text}\n\n{user_input}".strip()
-        
+        final_prompt = f"{ocr_text}
+
+{user_input}".strip()
         if not final_prompt:
             return jsonify({'reply': "⚠️ No input received. Please try again.", 'youtube_embed': ""}), 400
-        
         normalized_prompt = normalize(final_prompt)
-        
         with sqlite3.connect(DB_FILE) as conn:
             conn.row_factory = sqlite3.Row
             existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (normalized_prompt,)).fetchone()
             if existing:
                 return jsonify({'reply': existing['answer'] or "(No answer available)", 'youtube_embed': existing['youtube'] or ""})
-        
         if 'messages' not in session:
             session['messages'] = [{"role": "system", "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."}]
-        
         session['messages'].append({"role": "user", "content": final_prompt})
         session['messages'] = session['messages'][-20:]
-        
         response = openai.ChatCompletion.create(model="gpt-4o", messages=session['messages'])
         assistant_reply = response.choices[0].message.content.strip()
         youtube_embed = get_youtube_embed(final_prompt)
-        
         with sqlite3.connect(DB_FILE) as conn:
             conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (final_prompt, normalized_prompt, assistant_reply, youtube_embed))
-        
         return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
-    
     except Exception as e:
         print(f"❌ Chat Processing Error: {e}")
         return jsonify({'reply': "❌ An error occurred. Please try again.", 'youtube_embed': ""}), 500
-
 
 
 if __name__ == "__main__":

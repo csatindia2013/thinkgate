@@ -32,7 +32,7 @@ def normalize(text):
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
-        conn.execute("
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 question TEXT NOT NULL,
@@ -40,7 +40,7 @@ def init_db():
                 answer TEXT,
                 youtube TEXT
             )
-        ")
+        """)
 
 
 init_db()
@@ -83,7 +83,7 @@ def admin_dashboard():
         if search:
             questions = conn.execute("SELECT * FROM questions WHERE question LIKE ? ORDER BY id DESC", (f"%{search}%",)).fetchall()
         else:
-            questions = conn.execute("SELECT * FROM questions ORDER BY id DESC LIMIT 10").fetchall()
+            questions = conn.execute("""SELECT * FROM questions ORDER BY id DESC LIMIT 10""").fetchall()
     return render_template('admin.html', questions=questions, search=search)
 
 

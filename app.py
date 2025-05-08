@@ -156,9 +156,68 @@ def home():
     ]
     return render_template("home.html", courses=courses)
 
-@app.route('/chat')
+@app.route('/chat', methods=['POST'])
 def chat():
-    return render_template('chat.html')
+    try:
+        # Get the user input from the form
+        user_input = request.form.get('userInput', '').strip()
+        uploaded_file = request.files.get('cameraInput') or request.files.get('galleryInput')
+        
+        # Extract text from the image if provided
+        ocr_text = ""
+        if uploaded_file:
+            try:
+                image = Image.open(uploaded_file.stream).convert('RGB')
+                image.thumbnail((1024, 1024))
+                ocr_text = pytesseract.image_to_string(image).strip()
+            except Exception as e:
+                print(f"❌ OCR Error: {e}")
+                return jsonify({'reply': "❌ Error processing image. Please try again.", 'youtube_embed': ""}), 500
+
+        # Combine OCR text with user input
+        final_prompt = f"{ocr_text}\n\n{user_input}".strip()
+
+        # If no valid input, return error message
+        if not final_prompt:
+            return jsonify({'reply': "⚠️ No input received. Please try again.", 'youtube_embed': ""}), 400
+        
+        # Check if the message is already in the database
+        normalized_prompt = normalize(final_prompt)
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.row_factory = sqlite3.Row
+            existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (normalized_prompt,)).fetchone()
+            if existing:
+                return jsonify({
+                    'reply': existing['answer'] or "(No answer available)",
+                    'youtube_embed': existing['youtube'] or ""
+                })
+
+        # Generate response from OpenAI
+        if 'messages' not in session:
+            session['messages'] = [{
+                "role": "system",
+                "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."
+            }]
+
+        session['messages'].append({"role": "user", "content": final_prompt})
+        session['messages'] = session['messages'][-20:]  # Keep last 20 messages
+
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=session['messages']
+        )
+        assistant_reply = response.choices[0].message.content.strip()
+
+        # Save the conversation to the database
+        youtube_embed = get_youtube_embed(final_prompt)
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (final_prompt, normalized_prompt, assistant_reply, youtube_embed))
+
+        return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
+
+    except Exception as e:
+        print(f"❌ Chat Processing Error: {e}")
+        return jsonify({'reply': "❌ An error occurred. Please try again.", 'youtube_embed': ""}), 500
 
 
 

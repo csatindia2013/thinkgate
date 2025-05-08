@@ -9,11 +9,18 @@ from functools import wraps
 import math
 import re
 from sympy import symbols, Eq, solve
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 
+# ✅ Load environment variables
+load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+WHATSAPP_API_URL = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
 
 DB_FILE = 'questions.db'
 
@@ -79,26 +86,6 @@ def admin_dashboard():
     return render_template('admin.html', questions=questions, search=search)
 
 
-@app.route('/admin/questions')
-@login_required
-def view_questions():
-    page = int(request.args.get('page', 1))
-    per_page = 10
-    offset = (page - 1) * per_page
-    search = request.args.get('search', '').strip()
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        if search:
-            total = cursor.execute("SELECT COUNT(*) FROM questions WHERE question LIKE ? OR answer LIKE ?", (f"%{search}%", f"%{search}%")).fetchone()[0]
-            questions = cursor.execute("SELECT * FROM questions WHERE question LIKE ? OR answer LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?", (f"%{search}%", f"%{search}%", per_page, offset)).fetchall()
-        else:
-            total = cursor.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
-            questions = cursor.execute("SELECT * FROM questions ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
-    total_pages = math.ceil(total / per_page)
-    return render_template('questions.html', questions=questions, page=page, total_pages=total_pages, search_query=search)
-
-
 @app.route('/admin/add', methods=['GET', 'POST'])
 @login_required
 def add_question():
@@ -109,7 +96,7 @@ def add_question():
         norm_q = normalize(q)
         with sqlite3.connect(DB_FILE) as conn:
             conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (q, norm_q, a, y))
-        return redirect(url_for('view_questions'))
+        return redirect(url_for('admin_dashboard'))
     return render_template('add.html')
 
 
@@ -124,139 +111,63 @@ def edit_question(question_id):
             new_y = request.form.get('youtube')
             norm_q = normalize(new_q)
             conn.execute("UPDATE questions SET question=?, normalized_question=?, answer=?, youtube=? WHERE id=?", (new_q, norm_q, new_a, new_y, question_id))
-            return redirect(url_for('view_questions'))
+            return redirect(url_for('admin_dashboard'))
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
 
 
-@app.route('/admin/delete/<int:question_id>', methods=['POST'])
-@login_required
-def delete_question(question_id):
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.execute("DELETE FROM questions WHERE id=?", (question_id,))
-    return redirect(url_for('view_questions'))
+@app.route('/webhook', methods=['GET', 'POST'])
+def whatsapp_webhook():
+    if request.method == 'GET':
+        verify_token = "my_secure_token"
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
+        if mode == "subscribe" and token == verify_token:
+            print("✅ Webhook Verified Successfully")
+            return challenge, 200
+        else:
+            return "Verification Failed", 403
 
-@app.route('/admin/cleared')
-@login_required
-def cleared_questions():
-    return render_template('cleared.html')
-
-
-@app.route('/')
-def index():
-    return render_template('chat.html')
-
-
-def try_solve_equation_pair(prompt):
-    try:
-        equations = re.findall(r'[\w\+\-\*/\^\s=]+', prompt)
-        if len(equations) < 2:
-            return None
-        eqs = [re.sub(r'(\b[a-z])(?=\b[a-z])', r'\1*', eq.replace('^', '**')) for eq in equations[:2]]
-        x, y = symbols('x y')
-        exprs = [Eq(eval(e.split('=')[0]), eval(e.split('=')[1])) for e in eqs]
-        solution = solve(exprs, (x, y), dict=True)
-        if solution:
-            return "✅ Solution found: " + ", ".join([f"x = {s[x]}, y = {s[y]}" for s in solution])
-        return None
-    except Exception as e:
-        print("❌ Equation solving failed:", e)
-        return None
-
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    final_prompt = ""
-    user_input = request.form.get('userInput', '').strip()
-    uploaded_file = request.files.get('cameraInput') or request.files.get('galleryInput')
-    ocr_text = ""
-
-    if uploaded_file:
+    if request.method == 'POST':
         try:
-            image = Image.open(uploaded_file.stream).convert('RGB')
-            image.thumbnail((1024, 1024))
-            ocr_text = pytesseract.image_to_string(image)
+            data = request.json
+            if data.get("messages"):
+                message_data = data["messages"][0]
+                from_number = message_data["from"]
+                user_message = message_data["text"]["body"]
+
+                # Process the message
+                response_text = process_message(user_message)
+                send_whatsapp_message(from_number, response_text)
+            return "200 OK"
         except Exception as e:
-            print(f"OCR Error: {e}")
+            print(f"❌ Webhook Error: {e}")
+            return "500 Internal Server Error"
 
-    if ocr_text.strip():
-        final_prompt += f"OCR Extracted Text:\n{ocr_text.strip()}\n\n"
-    if user_input:
-        final_prompt += user_input
 
-    if not final_prompt.strip():
-        return jsonify({'reply': "⚠️ No input received.", 'youtube_embed': ""})
-
-    norm_prompt = normalize(final_prompt.strip())
-
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.row_factory = sqlite3.Row
-        existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (norm_prompt,)).fetchone()
-
-    if existing:
-        return jsonify({
-            'reply': existing['answer'] or "(No answer available)",
-            'youtube_embed': existing['youtube'] or ""
-        })
-
-    equation_answer = try_solve_equation_pair(final_prompt)
-    if equation_answer:
-        return jsonify({'reply': equation_answer, 'youtube_embed': get_youtube_embed(final_prompt)})
-
-    if 'messages' not in session:
-        session['messages'] = [{
-            "role": "system",
-            "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."
-        }]
-
-    session['messages'].append({"role": "user", "content": final_prompt.strip()})
-    session['messages'] = session['messages'][-20:]
-
+def send_whatsapp_message(to, message):
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {
+            "body": message
+        }
+    }
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=session['messages']
-        )
-        assistant_reply = response.choices[0].message.content.strip()
+        response = requests.post(WHATSAPP_API_URL, headers=headers, json=data)
+        response_data = response.json()
+        print("✅ WhatsApp Message Sent:", response_data)
+        return response_data
     except Exception as e:
-        import traceback
-        print("❌ GPT Error:", e)
-        traceback.print_exc()
-        return jsonify({'reply': "❗ Error processing your request. Please try again.", 'youtube_embed': ""}), 500
-
-    youtube_embed = get_youtube_embed(final_prompt)
-
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (final_prompt.strip(), norm_prompt, assistant_reply, youtube_embed))
-
-    return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
-
-
-def get_youtube_embed(query):
-    api_key = os.getenv("YOUTUBE_API_KEY")
-    if not api_key:
-        return ""
-    try:
-        response = requests.get(
-            "https://www.googleapis.com/youtube/v3/search",
-            params={
-                'part': 'snippet',
-                'q': query,
-                'key': api_key,
-                'maxResults': 1,
-                'type': 'video',
-                'videoEmbeddable': 'true',
-                'safeSearch': 'strict'
-            }
-        )
-        data = response.json()
-        if 'items' in data and len(data['items']) > 0:
-            return f"https://www.youtube.com/embed/{data['items'][0]['id']['videoId']}"
-        return ""
-    except Exception as e:
-        print(f"YouTube API error: {e}")
-        return ""
+        print(f"❌ WhatsApp API Error: {e}")
+        return None
 
 
 if __name__ == "__main__":

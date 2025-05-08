@@ -25,10 +25,8 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "my_secure_token")
 
 DB_FILE = 'questions.db'
 
-
 def normalize(text):
     return re.sub(r'\s+', ' ', text.lower().strip())
-
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
@@ -42,9 +40,7 @@ def init_db():
             )
         """)
 
-
 init_db()
-
 
 def login_required(f):
     @wraps(f)
@@ -53,7 +49,6 @@ def login_required(f):
             return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
     return wrapper
-
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_login():
@@ -66,13 +61,11 @@ def admin_login():
             error = "Invalid credentials"
     return render_template('login.html', error=error)
 
-
 @app.route('/admin/logout')
 @login_required
 def admin_logout():
     session.clear()
     return redirect(url_for('admin_login'))
-
 
 @app.route('/admin/dashboard')
 @login_required
@@ -86,7 +79,6 @@ def admin_dashboard():
             questions = conn.execute("SELECT * FROM questions ORDER BY id DESC LIMIT 10").fetchall()
     return render_template('admin.html', questions=questions, search=search)
 
-
 @app.route('/admin/add', methods=['GET', 'POST'])
 @login_required
 def add_question():
@@ -99,7 +91,6 @@ def add_question():
             conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (q, norm_q, a, y))
         return redirect(url_for('admin_dashboard'))
     return render_template('add.html')
-
 
 @app.route('/admin/edit/<int:question_id>', methods=['GET', 'POST'])
 @login_required
@@ -115,45 +106,6 @@ def edit_question(question_id):
             return redirect(url_for('admin_dashboard'))
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
-
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        user_input = request.form.get('userInput', '').strip()
-        uploaded_file = request.files.get('cameraInput') or request.files.get('galleryInput')
-        ocr_text = ""
-        if uploaded_file:
-            try:
-                image = Image.open(uploaded_file.stream).convert('RGB')
-                image.thumbnail((1024, 1024))
-                ocr_text = pytesseract.image_to_string(image).strip()
-            except Exception as e:
-                print(f"❌ OCR Error: {e}")
-                return jsonify({'reply': "❌ Error processing image. Please try again.", 'youtube_embed': ""}), 500
-        final_prompt = f"{ocr_text}\n\n{user_input}".strip()
-        if not final_prompt:
-            return jsonify({'reply': "⚠️ No input received. Please try again.", 'youtube_embed': ""}), 400
-        normalized_prompt = normalize(final_prompt)
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.row_factory = sqlite3.Row
-            existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (normalized_prompt,)).fetchone()
-            if existing:
-                return jsonify({'reply': existing['answer'] or "(No answer available)", 'youtube_embed': existing['youtube'] or ""})
-        if 'messages' not in session:
-            session['messages'] = [{"role": "system", "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."}]
-        session['messages'].append({"role": "user", "content": final_prompt})
-        session['messages'] = session['messages'][-20:]
-        response = openai.ChatCompletion.create(model="gpt-4o", messages=session['messages'])
-        assistant_reply = response.choices[0].message.content.strip()
-        youtube_embed = get_youtube_embed(final_prompt)
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT INTO questions (question, normalized_question, answer, youtube) VALUES (?, ?, ?, ?)", (final_prompt, normalized_prompt, assistant_reply, youtube_embed))
-        return jsonify({'reply': assistant_reply, 'youtube_embed': youtube_embed or ""})
-    except Exception as e:
-        print(f"❌ Chat Processing Error: {e}")
-        return jsonify({'reply': "❌ An error occurred. Please try again.", 'youtube_embed': ""}), 500
-
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def whatsapp_webhook():
@@ -177,50 +129,6 @@ def whatsapp_webhook():
     except Exception as e:
         print(f"❌ Webhook Error: {e}")
         return '500 Internal Server Error', 500
-
-
-def process_message(user_message):
-    normalized_prompt = normalize(user_message)
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.row_factory = sqlite3.Row
-        existing = conn.execute("SELECT answer, youtube FROM questions WHERE normalized_question = ?", (normalized_prompt,)).fetchone()
-        if existing:
-            return existing['answer'] or '(No answer available)'
-    if 'messages' not in session:
-        session['messages'] = [{"role": "system", "content": "You are a helpful AI tutor for students. If the user's query involves any mathematical expression, equation, or calculation, always reply using LaTeX formatting inside $$ symbols."}]
-    session['messages'].append({"role": "user", "content": user_message.strip()})
-    session['messages'] = session['messages'][-20:]
-    try:
-        response = openai.ChatCompletion.create(model="gpt-4o", messages=session['messages'])
-        assistant_reply = response.choices[0].message.content.strip()
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT INTO questions (question, normalized_question, answer) VALUES (?, ?, ?)", (user_message.strip(), normalized_prompt, assistant_reply))
-        return assistant_reply
-    except Exception as e:
-        print(f"❌ GPT Error: {e}")
-        return "❌ An error occurred. Please try again."
-
-
-def send_whatsapp_message(to, message):
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
-        "text": {"body": message}
-    }
-    try:
-        response = requests.post(WHATSAPP_API_URL, headers=headers, json=data)
-        response_data = response.json()
-        print(f"✅ WhatsApp Message Sent: {response_data}")
-        return response_data
-    except Exception as e:
-        print(f"❌ WhatsApp API Error: {e}")
-        return None
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

@@ -83,7 +83,7 @@ def admin_dashboard():
         if search:
             questions = conn.execute("SELECT * FROM questions WHERE question LIKE ? ORDER BY id DESC", (f"%{search}%",)).fetchall()
         else:
-            questions = conn.execute("""SELECT * FROM questions ORDER BY id DESC LIMIT 10""").fetchall()
+            questions = conn.execute("SELECT * FROM questions ORDER BY id DESC LIMIT 10").fetchall()
     return render_template('admin.html', questions=questions, search=search)
 
 
@@ -115,6 +115,28 @@ def edit_question(question_id):
             return redirect(url_for('admin_dashboard'))
         question = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
     return render_template('edit_question.html', question=question)
+
+
+@app.route('/chat', methods=['GET', 'POST'])
+def chat():
+    if request.method == 'POST':
+        user_message = request.form.get('userInput', '').strip().lower()
+
+        # Simple math processing
+        if "find square of" in user_message:
+            number = re.findall(r"\d+", user_message)
+            if number:
+                n = int(number[0])
+                result = n ** 2
+                return jsonify({'reply': f"The square of {n} is {result}.", 'youtube_embed': ''})
+            else:
+                return jsonify({'reply': "❗ Please provide a valid number.", 'youtube_embed': ''})
+
+        # Default response
+        return jsonify({'reply': "Hello! How can I help you today?", 'youtube_embed': ''})
+
+    # For GET request, just load the chat page
+    return render_template("chat.html")
 
 
 @app.route('/webhook', methods=['GET', 'POST'])
@@ -164,7 +186,6 @@ def send_whatsapp_message(to, message):
     except Exception as e:
         print(f"❌ WhatsApp API Error: {e}")
         return None
-
 
 
 @app.route('/')

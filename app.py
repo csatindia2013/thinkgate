@@ -156,6 +156,11 @@ def home():
     ]
     return render_template("home.html", courses=courses)
 
+@app.route('/chat')
+def chat():
+    return render_template('chat.html')
+
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

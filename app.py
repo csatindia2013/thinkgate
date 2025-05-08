@@ -166,6 +166,17 @@ def send_whatsapp_message(to, message):
         return None
 
 
+
+
+@app.route('/')
+def home():
+    courses = [
+        {"subject": "Math", "title": "Algebra Basics", "desc": "Learn algebra from scratch", "video": "https://www.youtube.com/embed/abc123"},
+        {"subject": "Physics", "title": "Newton's Laws", "desc": "Understand the laws of motion", "video": "https://www.youtube.com/embed/def456"}
+    ]
+    return render_template("home.html", courses=courses)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host='0.0.0.0', port=port)
